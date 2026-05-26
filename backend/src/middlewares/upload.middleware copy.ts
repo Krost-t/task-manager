@@ -1,14 +1,20 @@
 import multer from "multer";
+import path from "path";
+import crypto from "crypto";
+import fs from "fs";
 
+const UPLOAD_DIR = path.resolve('uploads');
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-
-// Configure multer storage 
+// Configure multer storage
 const storage = multer.diskStorage({
     destination: function (_req, _file, cb) {
-        cb(null, 'uploads/'); // Specify the destination directory for uploaded files
+        cb(null, UPLOAD_DIR);
     },
     filename: function (_req, file, cb) {
-        cb(null, Date.now() + '-' + file.originalname); // Generate a unique filename for each uploaded file
+        const ext = path.extname(file.originalname).toLowerCase();
+        const random = crypto.randomBytes(6).toString('hex');
+        cb(null, `${Date.now()}-${random}${ext}`);
     }
 });
 
