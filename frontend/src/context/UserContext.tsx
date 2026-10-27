@@ -1,33 +1,15 @@
-import { useState, useEffect, createContext } from 'react'
+import { useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { axiosInstance } from '../utils/axiosInstance'
 import { API_PATHS } from '../utils/apiPaths'
+import { UserContext } from './userContextValue'
+import type { UserData } from './userContextValue'
 
-interface UserData {
-    token: string
-    name?: string
-    email?: string
-    role?: 'admin' | 'user'
-    profileImageUrl?: string
-    [key: string]: unknown
-}
-
-interface UserContextValue {
-    user: UserData | null
-    loading: boolean
-    updateUser: (userData: UserData) => void
-    clearUser: () => void
-}
-
-export const UserContext = createContext<UserContextValue | null>(null)
-
- const UserContextProvider = ({ children }: { children: ReactNode }) => {
+const UserContextProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<UserData | null>(null)
     const [loading, setLoading] = useState(() => !!localStorage.getItem('token'))
 
     useEffect(() => {
-        if (user) return
-
         const accessToken = localStorage.getItem('token')
         if (!accessToken) return
 
@@ -44,7 +26,6 @@ export const UserContext = createContext<UserContextValue | null>(null)
             }
         }
         fetchUser()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const updateUser = (userData: UserData) => {

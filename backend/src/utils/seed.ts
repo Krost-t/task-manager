@@ -31,6 +31,12 @@ const daysFromNow = (n: number): Date => {
 }
 
 const seed = async (): Promise<void> => {
+    if (process.env.NODE_ENV === 'production' && process.env.SEED_FORCE !== 'true') {
+        console.error('Refusing to seed in production (it wipes the database). Set SEED_FORCE=true to override.')
+        process.exitCode = 1
+        return
+    }
+
     try {
         await connectDB()
 
@@ -58,7 +64,6 @@ const seed = async (): Promise<void> => {
         const userId = idByEmail['user@example.com']!
 
         const tasksToCreate = [
-            // ----- Tâches de l'admin (créées et assignées à l'admin) -----
             {
                 title: "Configurer l'environnement de production",
                 description:
@@ -111,7 +116,6 @@ const seed = async (): Promise<void> => {
                 progress: 0,
             },
 
-            // ----- Tâches assignées à John Doe (créées par l'admin) -----
             {
                 title: 'Implémenter la page de profil utilisateur',
                 description:
@@ -182,7 +186,6 @@ const seed = async (): Promise<void> => {
                 progress: 100,
             },
 
-            // ----- Tâche partagée admin + user -----
             {
                 title: "Revue de code de la feature 'tâches partagées'",
                 description:

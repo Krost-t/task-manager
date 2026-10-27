@@ -12,9 +12,10 @@ const registerHandler = async (req: Request, res: Response): Promise<void> => {
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             res.status(400).json({ message: 'User already exists' });
+            return;
         }
 
-        let role: 'member' | 'admin'|'user' = 'member';
+        let role: 'member' | 'admin'|'user' = 'user';
         if (adminInviteToken && adminInviteToken === process.env.ADMIN_INVITE_TOKEN) {
             role = 'admin';
         }

@@ -113,7 +113,8 @@ Create a `.env` file in `backend/` (next to `package.json`). This file must
 PORT=8000
 CLIENT_URL=http://localhost:5173
 
-MONGO_URI=mongodb://127.0.0.1:27017/task-manager
+# MongoDB started with Docker (see "Run with Docker") - same user/password as the root .env
+MONGO_URI=mongodb://admin:change-me-mongo-password@127.0.0.1:27017/task-manager?authSource=admin
 
 JWT_SECRET=a-long-random-secret-key
 JWT_COOKIE_EXPIRES_IN=7
@@ -124,7 +125,8 @@ NODE_ENV=development
 
 You must adapt:
 
-- `MONGO_URI` — connection string to your MongoDB (local or Atlas)
+- `MONGO_URI` — connection string to your MongoDB. The easiest is the Docker
+  one: `docker compose up -d mongo` (published on `127.0.0.1:27017` only)
 - `JWT_SECRET` — any long random string
 - `JWT_COOKIE_EXPIRES_IN` — JWT lifetime **in days**
 - `ADMIN_INVITE_TOKEN` — secret required at registration to obtain the
@@ -217,7 +219,7 @@ task-manager/
 │   │   │   └── report.controller.ts
 │   │   ├── middlewares/
 │   │   │   ├── auth.middleware.ts
-│   │   │   └── upload.middleware copy.ts
+│   │   │   └── upload.middleware.ts
 │   │   ├── models/
 │   │   │   ├── User.ts
 │   │   │   └── Task.ts
@@ -245,7 +247,7 @@ task-manager/
 │   │   ├── context/
 │   │   │   └── UserContext.tsx
 │   │   ├── hooks/
-│   │   │   └── useUserAuth.ts
+│   │   │   └── useUserAuth.tsx
 │   │   ├── pages/
 │   │   │   ├── Admin/
 │   │   │   ├── Auth/
@@ -338,6 +340,87 @@ Possible task **priority** values: `Low`, `Medium`, `High`.
 | `npm run preview`  | Preview the production build         |
 | `npm run lint`     | Run ESLint                           |
 
+## 🐳 Run with Docker
+
+Requires Docker + Docker Compose v2.
+
+```bash
+# create .env at the repo root (variables below)
+docker compose up -d --build  # mongo + backend + frontend (nginx)
+docker compose exec -e SEED_FORCE=true backend node dist/utils/seed.js   # optional demo data (wipes the DB!)
+```
+
+Root `.env` (never committed):
+
+```env
+APP_PORT=8080
+APP_URL=http://localhost:8080
+MONGO_ROOT_USER=admin
+MONGO_ROOT_PASSWORD=<strong-password>
+MONGO_DB=task-manager
+MONGO_PORT=27017
+JWT_SECRET=<openssl rand -hex 32>
+JWT_COOKIE_EXPIRES_IN=7
+ADMIN_INVITE_TOKEN=<secret>
+
+# server only (docker-compose.prod.yml)
+BACKEND_IMAGE=ghcr.io/krost-t/task-manager-backend
+FRONTEND_IMAGE=ghcr.io/krost-t/task-manager-frontend
+IMAGE_TAG=latest
+```
+
+The whole app is served on `http://localhost:8080` (`APP_PORT`): nginx serves
+the React build and forwards `/api` and `/uploads` to the backend. The backend
+is not exposed on the host. In the local stack MongoDB is published on
+`127.0.0.1:${MONGO_PORT:-27017}` only (for `npm run dev` / Compass); in
+`docker-compose.prod.yml` it is never exposed.
+
+MongoDB only, for local development of the backend:
+
+```bash
+docker compose up -d mongo
+```
+
+The seed refuses to run when `NODE_ENV=production` (the case inside the
+Docker image) unless `SEED_FORCE=true` is set, since it wipes the database.
+
+| File                       | Role                                              |
+| -------------------------- | ------------------------------------------------- |
+| `backend/Dockerfile`       | Multi-stage: compile TS, then run `dist/` as non-root |
+| `frontend/Dockerfile`      | Multi-stage: Vite build, then nginx               |
+| `frontend/nginx.conf`      | SPA fallback + reverse proxy to the API           |
+| `docker-compose.yml`       | Local / CI stack, images built from source        |
+| `docker-compose.prod.yml`  | Server stack, images pulled from GHCR             |
+| `.env` (not committed)     | Secrets and settings read by Compose              |
+
+## 🔁 CI/CD (GitHub Actions)
+
+`.github/workflows/ci-cd.yml` runs on every pull request and push to `main`:
+
+1. **Backend** — `npm ci` + `npm run build` (TypeScript compilation)
+2. **Frontend** — `npm ci` + `npm run lint` + `npm run build`
+3. **Docker** — builds both images, starts the full stack, runs a smoke test
+   (health, SPA routes, seed, login, protected route); on `main` pushes the
+   images to `ghcr.io/<owner>/task-manager-{backend,frontend}` (`<sha>` + `latest`)
+4. **Deploy** (on `main`, only if the repo variable `DEPLOY_ENABLED=true`) —
+   copies `docker-compose.prod.yml` to the server over SSH, pulls the new
+   images and restarts the stack.
+
+Deployment setup (GitHub → Settings → Secrets and variables → Actions):
+
+| Name                 | Type     | Value                                        |
+| -------------------- | -------- | -------------------------------------------- |
+| `DEPLOY_ENABLED`     | Variable | `true`                                       |
+| `DEPLOY_PATH`        | Variable | Folder on the server (default `/opt/task-manager`) |
+| `DEPLOY_HOST`        | Secret   | Server IP / domain                           |
+| `DEPLOY_USER`        | Secret   | SSH user (member of the `docker` group)      |
+| `DEPLOY_SSH_KEY`     | Secret   | Private SSH key                              |
+| `DEPLOY_PORT`        | Secret   | SSH port (optional, default `22`)            |
+| `DEPLOY_KNOWN_HOSTS` | Secret   | Output of `ssh-keyscan <host>` (optional, recommended) |
+
+On the server, create `<DEPLOY_PATH>/.env` with the real
+production values (same variables as the local `.env`) before the first deployment.
+
 ## 📄 License
 
 See [LICENSE](./LICENSE). This project is proprietary — **All Rights
@@ -353,6 +436,7 @@ cd task-manager
 cd backend
 npm install
 # create .env (see Environment Variables section)
+# MongoDB in Docker (from the repo root, once .env exists): docker compose up -d mongo
 npm run seed     # optional: populate DB with demo users + tasks
 npm run dev
 

@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import type { ReactNode } from 'react'
-import { UserContext } from '../../context/UserContext'
+import { UserContext } from '../../context/userContextValue'
 import Navbar from './Navbar'
 import SideMenu from "./SideMenu"
 

@@ -13,12 +13,18 @@ const protectRoute = async (req: Request, res: Response, next: Function): Promis
 
     if (!token) {
         res.status(401).json({ message: "Unauthorized: No token provided" });
+        return;
     }
 
     try {
 
         const decoded: any = jwt.verify(token, process.env.JWT_SECRET as string);
         (req as any).user = await User.findById(decoded.id).select('-password');
+
+        if (!(req as any).user) {
+            res.status(401).json({ message: 'Not authorized, user not found' });
+            return;
+        }
 
         next();
     } catch (error) {

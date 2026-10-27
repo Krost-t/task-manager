@@ -1,4 +1,4 @@
-import { 
+import {
     LuLayoutDashboard,
     LuUsers,
     LuClipboardCheck,
@@ -11,7 +11,7 @@ export const SIDE_MENU_DATA= [
         id: "01",
         label: "Dashboard",
         icon: LuLayoutDashboard,
-        path: "/admmin/dashboard",
+        path: "/admin/dashboard",
     },
     {
         id: "02",
@@ -21,7 +21,7 @@ export const SIDE_MENU_DATA= [
     },
     {
         id: "03",
-        label: "Create Tasks",
+        label: "Create Task",
         icon: LuSquarePlus,
         path: "/admin/create-task",
     },
@@ -35,7 +35,7 @@ export const SIDE_MENU_DATA= [
         id: "05",
         label: "Logout",
         icon: LuLogOut,
-        path: "/admin/logout",
+        path: "logout",
     }
 ]
 
@@ -56,18 +56,18 @@ export const SIDE_MENU_USER_DATA = [
         id: "05",
         label: "Logout",
         icon: LuLogOut,
-        path: "/user/logout",
+        path: "logout",
     },
 ]
 
 export const PRIORITY_DATA = [
-    {label: "Low", value: "low"},
-    {label: "Medium", value: "medium"},
-    {label: "High", value: "high"},
+    {label: "Low", value: "Low"},
+    {label: "Medium", value: "Medium"},
+    {label: "High", value: "High"},
 ]
 
 export const STATUS_DATA = [
-    {label: "Pending", value: "pending"},
-    {label: "In Progress", value: "in-progress"},
-    {label: "Completed", value: "completed"},
+    {label: "Pending", value: "Pending"},
+    {label: "In Progress", value: "In-Progress"},
+    {label: "Completed", value: "Completed"},
 ]

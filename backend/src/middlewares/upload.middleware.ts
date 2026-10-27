@@ -6,7 +6,6 @@ import fs from "fs";
 const UPLOAD_DIR = path.resolve('uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-// Configure multer storage
 const storage = multer.diskStorage({
     destination: function (_req, _file, cb) {
         cb(null, UPLOAD_DIR);
@@ -18,7 +17,6 @@ const storage = multer.diskStorage({
     }
 });
 
-// File filter
 const fileFilter = (_req: any, file: any, cb: any) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
     if (allowedTypes.includes(file.mimetype)) {

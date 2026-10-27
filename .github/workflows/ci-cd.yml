@@ -1,0 +1,209 @@
+# ==========================================================
+#  Task Manager - CI/CD
+#
+#  Pull request -> main : CI (build + lint + Docker smoke test)
+#  Push on main         : CI + publish images to GHCR + deploy (if enabled)
+# ==========================================================
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel a running pipeline when a newer commit arrives on the same branch
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # --------------------------------------------------------
+  # 1. Backend: install + TypeScript compilation
+  # --------------------------------------------------------
+  backend:
+    name: Backend - build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+
+  # --------------------------------------------------------
+  # 2. Frontend: install + lint + type-check + Vite build
+  # --------------------------------------------------------
+  frontend:
+    name: Frontend - lint & build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  # --------------------------------------------------------
+  # 3. Docker: build the images, start the full stack,
+  #    run a smoke test, then push the images (main only)
+  # --------------------------------------------------------
+  docker:
+    name: Docker - build, smoke test & publish
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image names (GHCR needs lowercase)
+        run: |
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "BACKEND_IMAGE=ghcr.io/${OWNER}/task-manager-backend" >> "$GITHUB_ENV"
+          echo "FRONTEND_IMAGE=ghcr.io/${OWNER}/task-manager-frontend" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=${GITHUB_SHA}" >> "$GITHUB_ENV"
+
+      - name: Create the CI .env
+        run: |
+          cat > .env <<EOF
+          APP_PORT=8080
+          APP_URL=http://localhost:8080
+          MONGO_ROOT_USER=ci
+          MONGO_ROOT_PASSWORD=$(openssl rand -hex 16)
+          MONGO_DB=task-manager
+          JWT_SECRET=$(openssl rand -hex 32)
+          JWT_COOKIE_EXPIRES_IN=7
+          ADMIN_INVITE_TOKEN=$(openssl rand -hex 16)
+          EOF
+
+      - name: Build images
+        run: docker compose build
+
+      - name: Start the stack
+        run: docker compose up -d --wait --wait-timeout 180
+
+      - name: Smoke test
+        run: |
+          set -e
+          BASE=http://localhost:8080
+
+          echo "-> health"
+          curl -fsS "$BASE/api/health"
+
+          echo "-> frontend + React Router fallback"
+          curl -fsS "$BASE/" | grep -q '<div id="root">'
+          curl -fsS "$BASE/admin/dashboard" | grep -q '<div id="root">'
+
+          echo "-> seed + login"
+          docker compose exec -T -e SEED_FORCE=true backend node dist/utils/seed.js
+          TOKEN=$(curl -fsS -X POST "$BASE/api/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"admin@example.com","password":"Admin1234!"}' | jq -r .token)
+          test -n "$TOKEN" && test "$TOKEN" != "null"
+
+          echo "-> protected route"
+          curl -fsS "$BASE/api/tasks/dashboard-data" -H "Authorization: Bearer $TOKEN" | jq -e '.statistics.totalTasks == 8'
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push images (sha + latest)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker compose push backend frontend
+          for IMAGE in "$BACKEND_IMAGE" "$FRONTEND_IMAGE"; do
+            docker tag "$IMAGE:$IMAGE_TAG" "$IMAGE:latest"
+            docker push "$IMAGE:latest"
+          done
+
+  # --------------------------------------------------------
+  # 4. Deploy to the server over SSH (main only)
+  #    Enabled when the repository variable DEPLOY_ENABLED = true
+  # --------------------------------------------------------
+  deploy:
+    name: Deploy - production server
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    env:
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/task-manager' }}
+      SSH_TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+      SSH_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          if [ -n "$SSH_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$SSH_PORT" "${{ secrets.DEPLOY_HOST }}" > ~/.ssh/known_hosts
+          fi
+
+      - name: Upload the compose file
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "$SSH_PORT" "$SSH_TARGET" "mkdir -p '$DEPLOY_PATH'"
+          scp -i ~/.ssh/id_deploy -P "$SSH_PORT" docker-compose.prod.yml "$SSH_TARGET:$DEPLOY_PATH/docker-compose.prod.yml"
+
+      - name: Pull the new images and restart
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "$SSH_PORT" "$SSH_TARGET" bash -s <<EOF
+          set -e
+          cd '$DEPLOY_PATH'
+          test -f .env || { echo "Missing $DEPLOY_PATH/.env on the server"; exit 1; }
+          echo '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin
+          export IMAGE_TAG='${GITHUB_SHA}'
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d --wait --wait-timeout 180
+          docker logout ghcr.io
+          docker image prune -f
+          EOF

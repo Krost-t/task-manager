@@ -5,7 +5,7 @@ import Task from '../models/Task.js';
 
 const getAllUsersHandler = async (_req: Request, res: Response): Promise<void> => {
     try {
-        const users = await User.find({ role: 'member' }).select('-password');
+        const users = await User.find({ role: { $ne: 'admin' } }).select('-password');
 
         const usersWithTaskCount = await Promise.all(users.map(async (user) => {
             const pendingTask = await Task.countDocuments({ assignedTo: user._id, status: 'Pending' });
@@ -22,7 +22,7 @@ const getAllUsersHandler = async (_req: Request, res: Response): Promise<void> =
             
         res.status(200).json(usersWithTaskCount);
     } catch (error) {
-       res.status(500).json({ message: 'Server error', /* error:error.message  */}); 
+       res.status(500).json({ message: 'Server error', });
     }
 }
 
@@ -35,7 +35,7 @@ const getUserByIdHandler = async (req: Request, res: Response): Promise<void> =>
         }
         res.status(200).json(user);
     } catch (error) {
-        res.status(500).json({ message: 'Server error', /* error:error.message  */});
+        res.status(500).json({ message: 'Server error', });
     }
 }
 

@@ -2,7 +2,7 @@ import express from 'express';
 import type { Router } from 'express';
 import { registerHandler, loginHandler, getUserHandler, updateUserHandler,uploadProfileImageHandler } from '../controllers/auth.controller.js';
 import { protectRoute } from "../middlewares/auth.middleware.js"
-import upload from '../middlewares/upload.middleware copy.js';
+import upload from '../middlewares/upload.middleware.js';
 
 const authRoutes: Router = express.Router();
 

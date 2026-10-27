@@ -1,4 +1,3 @@
-import React from 'react'
 import type { Payload } from 'recharts/types/component/DefaultTooltipContent';
 
 const CustomTooltip = ({ active, payload }: { active?: boolean, payload?: Payload[] }) => {

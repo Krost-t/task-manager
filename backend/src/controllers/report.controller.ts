@@ -47,7 +47,7 @@ const exportTasksHandler = async (_req: Request, res: Response): Promise<void> =
 
 const exportUsersHandler = async (_req: Request, res: Response): Promise<void> => {
     try {
-        const user = await User.find().select('name email_id').lean();
+        const user = await User.find().select('name email _id').lean();
         const userTasks = await Task.find().populate(
             "assignedTo",
             "name email _id"
@@ -90,10 +90,12 @@ const exportUsersHandler = async (_req: Request, res: Response): Promise<void> =
             { header: "User Name", key: "name", width: 30 },
             { header: "Email", key: "email", width: 40 },
             { header: "Total Assigned Task", key: "taskCount", width: 30 },
-            { header: "Pending Tasks", key: "pendingTasks", width: 20 }
+            { header: "Pending Tasks", key: "pendingTasks", width: 20 },
+            { header: "In Progress Tasks", key: "inProgressTasks", width: 20 },
+            { header: "Completed Tasks", key: "completedTasks", width: 20 },
         ]
 
-        Object.keys(userTaskMap).forEach((user) => {
+        Object.values(userTaskMap).forEach((user) => {
             worksheet.addRow(user)
         })
 

@@ -1,36 +1,33 @@
- const BASE_URL: string =  import.meta.env.VITE_API_URL;;
+ const BASE_URL: string =  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 const  API_PATHS = {
     AUTH: {
-        LOGIN: `/auth/login`,
-        REGISTER: `/auth/register`,
-        GET_PROFILE: `/auth/profile`
+        LOGIN: `/api/auth/login`,
+        REGISTER: `/api/auth/register`,
+        GET_PROFILE: `/api/auth/profile`
     },
     USERS: {
-        GET_ALL_USERS: `/users`,
-        GET_USER_BY_ID: (userId: string) => `/users/${userId}`,
-        CREATE_USER: `/users`,
-        UPDATE_USER: (userId: string) =>`/users/${userId}`,
-        DELETE_USER: (userId: string) =>`/users/${userId}`,
+        GET_ALL_USERS: `/api/users`,
+        GET_USER_BY_ID: (userId: string) => `/api/users/${userId}`,
     },
     TASKS: {
-        GET_DASHBOARD_DATA: `/tasks/dashboard-stats`,
-        GET_USER_DASHBOARD_DATA: `/tasks/user-dashboard-data`,
-        GET_ALL_TASKS: `/tasks`,
-        GET_TASK_BY_ID: (taskId: string) => `/tasks/${taskId}`,
-        CREATE_TASK: `/tasks`,
-        UPDATE_TASK: (taskId: string) =>`/tasks/${taskId}`,
-        DELETE_TASK: (taskId: string) =>`/tasks/${taskId}`,
+        GET_DASHBOARD_DATA: `/api/tasks/dashboard-data`,
+        GET_USER_DASHBOARD_DATA: `/api/tasks/user-dashboard-data`,
+        GET_ALL_TASKS: `/api/tasks`,
+        GET_TASK_BY_ID: (taskId: string) => `/api/tasks/${taskId}`,
+        CREATE_TASK: `/api/tasks`,
+        UPDATE_TASK: (taskId: string) =>`/api/tasks/${taskId}`,
+        DELETE_TASK: (taskId: string) =>`/api/tasks/${taskId}`,
 
-        UPDATE_TASK_STATUS: (taskId: string) =>`/tasks/${taskId}/status`,
-        UPDATE_TODO_CHECKLIST: (taskId: string) =>`/tasks/${taskId}/todo`,
+        UPDATE_TASK_STATUS: (taskId: string) =>`/api/tasks/${taskId}/status`,
+        UPDATE_TODO_CHECKLIST: (taskId: string) =>`/api/tasks/${taskId}/todo`,
     },
     REPORTS: {
-        EXPORT_TASKS: `/reports/export/tasks`,
-        EXPORT_USERS: `/reports/export/users`,
+        EXPORT_TASKS: `/api/reports/export/tasks`,
+        EXPORT_USERS: `/api/reports/export/users`,
     },
     IMAGE: {
-        UPLOAD_IMAGE: `/auth/upload-profile-image`,
+        UPLOAD_IMAGE: `/api/auth/upload-profile-image`,
     }
 }
 

@@ -7,7 +7,7 @@ import Input from '../../components/Inputs/Input'
 import { Link, useNavigate } from 'react-router-dom'
 import { API_PATHS } from '../../utils/apiPaths'
 import { axiosInstance } from '../../utils/axiosInstance'
-import { UserContext } from '../../context/UserContext'
+import { UserContext } from '../../context/userContextValue'
 import uploadImage from '../../utils/uploadImage'
 
 const SignUp = () => {
@@ -45,9 +45,7 @@ const SignUp = () => {
 
     setError("")
 
-    //* SignUp API Call here
     try {
-      // Upload image to server
       if (profilePic) {
         const imgUploadRes = await uploadImage(profilePic)
         profileImageUrl = imgUploadRes.imageUrl || ""
@@ -91,7 +89,7 @@ const SignUp = () => {
         <form onSubmit={handleSignUp} >
           <ProfilePhotoSelector image={profilePic} setImage={setProfilePic} />
 
-          <div className="grid gid-col-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               value={fullName}
               onChange={({ target }) => setFullName(target.value)}

@@ -4,7 +4,7 @@ import UI_IMG from "../../assets/img/authImg.jpg";
 const AuthLayout = ({ children }: { children: React.ReactNode }) => {
     return (
         <div className="flex">
-            <div className="w-screen h-screen md:w[60vw] px-12 pt-8 pb-12">
+            <div className="w-screen h-screen md:w-[60vw] px-12 pt-8 pb-12">
                 <h2 className="text-lg font-medium text-black">Welcome to the Task Manager</h2>
                 {children}
             </div>

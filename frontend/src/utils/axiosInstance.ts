@@ -10,7 +10,6 @@ const axiosInstance = axios.create({
     },
 })
 
-// Request interceptor to add auth token to headers
 axiosInstance.interceptors.request.use(
     (config) => {
         const accessToken = localStorage.getItem('token')
@@ -24,7 +23,6 @@ axiosInstance.interceptors.request.use(
     }
 )
 
-// Response interceptor to handle errors
 axiosInstance.interceptors.response.use(
     (response) => {
         return response

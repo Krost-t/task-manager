@@ -15,7 +15,7 @@ const InfoCard = ({ label, values, color }: InfoCardProps) => {
       <p className="text-xs md:text-[14px] text-gray-500">
         <span className="text-sm md:text-[15px] text-black font-semibold">
           {values}
-        </span>
+        </span>{" "}
         {label}
       </p>
     </div>
