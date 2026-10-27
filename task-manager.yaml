@@ -1,0 +1,262 @@
+# ==========================================================
+# Task Manager sur K3s (BastionForge)
+# Traduction de docker-compose.prod.yml :
+#   mongo    -> StatefulSet + volume persistant + Service "mongo"
+#   backend  -> Deployment + volume uploads + Service "backend"
+#   frontend -> Deployment (nginx) + Service "frontend"
+#   ports    -> Ingress Traefik (taskmanager.lab)
+#   .env     -> Secret "task-manager-secrets" (créé à la main, JAMAIS dans Git)
+# ==========================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: task-manager
+---
+# Isolation sortante : les pods ne peuvent joindre ni le LAN ni l'hôte
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-sans-lan
+  namespace: task-manager
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 192.168.0.0/16
+              - 172.16.0.0/12
+              - 10.0.2.2/32
+---
+# ---------------------- MongoDB ----------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  namespace: task-manager
+spec:
+  selector:
+    app: mongo
+  ports:
+    - port: 27017
+      targetPort: 27017
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+  namespace: task-manager
+spec:
+  serviceName: mongo
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:7
+          ports:
+            - containerPort: 27017
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: task-manager-secrets
+                  key: MONGO_ROOT_USER
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: task-manager-secrets
+                  key: MONGO_ROOT_PASSWORD
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+          readinessProbe:
+            exec:
+              command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+# ---------------------- Backend ----------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: uploads
+  namespace: task-manager
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend            # doit correspondre au nom utilisé dans nginx.conf du frontend
+  namespace: task-manager
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: task-manager
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate         # le volume uploads est en ReadWriteOnce
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/krost-t/task-manager-backend:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: PORT
+              value: "8000"
+            - name: CLIENT_URL
+              value: "http://taskmanager.lab:8080"
+            - name: JWT_COOKIE_EXPIRES_IN
+              value: "7"
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: task-manager-secrets
+                  key: MONGO_URI
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: task-manager-secrets
+                  key: JWT_SECRET
+            - name: ADMIN_INVITE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: task-manager-secrets
+                  key: ADMIN_INVITE_TOKEN
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: uploads
+---
+# ---------------------- Frontend ----------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: task-manager
+spec:
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: task-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/krost-t/task-manager-frontend:latest
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+# ---------------------- Accès ----------------------
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: task-manager
+  namespace: task-manager
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: taskmanager.lab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
